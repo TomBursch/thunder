@@ -47,7 +47,7 @@ class SettingsPage extends StatelessWidget {
                       title: Text(topic.title),
                       leading: Icon(topic.icon),
                       trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () => GoRouter.of(context).push(topic.path, extra: context.read<ThunderBloc>()),
+                      onTap: () => GoRouter.of(context).push(topic.path),
                     ))
                 .toList(),
           ),

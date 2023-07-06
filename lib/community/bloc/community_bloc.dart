@@ -25,7 +25,7 @@ EventTransformer<E> throttleDroppable<E>(Duration duration) {
 }
 
 class CommunityBloc extends Bloc<CommunityEvent, CommunityState> {
-  CommunityBloc() : super(const CommunityState()) {
+  CommunityBloc([PostListingType? listingType]) : super(CommunityState(listingType: listingType)) {
     on<GetCommunityPostsEvent>(
       _getCommunityPostsEvent,
       transformer: throttleDroppable(throttleDuration),

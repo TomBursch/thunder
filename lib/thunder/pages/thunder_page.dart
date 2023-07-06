@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:go_router/go_router.dart';
 import 'package:overlay_support/overlay_support.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:thunder/community/widgets/community_drawer.dart';
 import 'package:thunder/core/singletons/preferences.dart';
 import 'package:thunder/inbox/bloc/inbox_bloc.dart';
 import 'package:thunder/inbox/inbox.dart';
@@ -23,7 +24,9 @@ import 'package:thunder/thunder/bloc/thunder_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class Thunder extends StatefulWidget {
-  const Thunder({super.key});
+  final Widget body;
+
+  const Thunder({super.key, required this.body});
 
   @override
   State<Thunder> createState() => _ThunderState();
@@ -79,25 +82,24 @@ class _ThunderState extends State<Thunder> {
 
   // Handles double-tap to open the drawer
   void _handleDoubleTap() async {
-    final SharedPreferences prefs = UserPreferences.instance.sharedPreferences;
-    bool bottomNavBarDoubleTapGestures = prefs.getBool('setting_general_enable_doubletap_gestures') ?? false;
+    final ThunderState state = context.read<ThunderBloc>().state;
+    final bool bottomNavBarDoubleTapGestures =
+        state.bottomNavBarDoubleTapGestures;
 
     final bool scaffoldState = _feedScaffoldKey.currentState!.isDrawerOpen;
 
     if (bottomNavBarDoubleTapGestures == true && scaffoldState == true) {
       _feedScaffoldKey.currentState?.closeDrawer();
-    } else if (bottomNavBarDoubleTapGestures == true && scaffoldState == false) {
+    } else if (bottomNavBarDoubleTapGestures == true &&
+        scaffoldState == false) {
       _feedScaffoldKey.currentState?.openDrawer();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (context) => ThunderBloc()),
-        BlocProvider(create: (context) => InboxBloc()),
-      ],
+    return BlocProvider(
+      create: (context) => InboxBloc(),
       child: BlocBuilder<ThunderBloc, ThunderState>(
         builder: (context, thunderBlocState) {
           FlutterNativeSplash.remove();
@@ -110,16 +112,19 @@ class _ThunderState extends State<Thunder> {
               return const Center(child: CircularProgressIndicator());
             case ThunderStatus.refreshing:
             case ThunderStatus.success:
-              return Scaffold(
-                bottomNavigationBar: _getScaffoldBottomNavigationBar(context),
-                body: MultiBlocProvider(
-                  providers: [
-                    BlocProvider<AuthBloc>(create: (context) => AuthBloc()),
-                    BlocProvider<AccountBloc>(create: (context) => AccountBloc()),
-                  ],
-                  child: BlocConsumer<AuthBloc, AuthState>(
+              return MultiBlocProvider(
+                providers: [
+                  BlocProvider<AuthBloc>(create: (context) => AuthBloc()),
+                  BlocProvider<AccountBloc>(create: (context) => AccountBloc()),
+                ],
+                child: Scaffold(
+                  bottomNavigationBar: _getScaffoldBottomNavigationBar(context),
+                  drawer:
+                      selectedPageIndex == 0 ? const CommunityDrawer() : null,
+                  body: BlocConsumer<AuthBloc, AuthState>(
                     listenWhen: (AuthState previous, AuthState current) {
-                      if (previous.isLoggedIn != current.isLoggedIn || previous.status == AuthStatus.initial) return true;
+                      if (previous.isLoggedIn != current.isLoggedIn ||
+                          previous.status == AuthStatus.initial) return true;
                       return false;
                     },
                     listener: (context, state) {
@@ -130,15 +135,22 @@ class _ThunderState extends State<Thunder> {
                       switch (state.status) {
                         case AuthStatus.initial:
                           context.read<AuthBloc>().add(CheckAuth());
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                              child: CircularProgressIndicator());
                         case AuthStatus.loading:
-                          WidgetsBinding.instance.addPostFrameCallback((_) => setState(() => selectedPageIndex = 0));
-                          return const Center(child: CircularProgressIndicator());
+                          WidgetsBinding.instance.addPostFrameCallback(
+                              (_) => setState(() => selectedPageIndex = 0));
+                          return const Center(
+                              child: CircularProgressIndicator());
                         case AuthStatus.success:
                           Version? version = thunderBlocState.version;
-                          bool showInAppUpdateNotification = thunderBlocState.showInAppUpdateNotification;
-                          bool? enableSentryErrorTracking = thunderBlocState.enableSentryErrorTracking;
-                          if (version?.hasUpdate == true && hasShownUpdateDialog == false && showInAppUpdateNotification == true) {
+                          bool showInAppUpdateNotification =
+                              thunderBlocState.showInAppUpdateNotification;
+                          bool? enableSentryErrorTracking =
+                              thunderBlocState.enableSentryErrorTracking;
+                          if (version?.hasUpdate == true &&
+                              hasShownUpdateDialog == false &&
+                              showInAppUpdateNotification == true) {
                             WidgetsBinding.instance.addPostFrameCallback((_) {
                               showUpdateNotification(context, version);
 
@@ -147,32 +159,20 @@ class _ThunderState extends State<Thunder> {
                           }
 
                           // Ask user if they want to opt-in to Sentry for the first time (based on if setting_error_tracking_enable_sentry is null)
-                          if (enableSentryErrorTracking == null && hasShownSentryDialog == false) {
+                          if (enableSentryErrorTracking == null &&
+                              hasShownSentryDialog == false) {
                             WidgetsBinding.instance.addPostFrameCallback((_) {
                               showSentryNotification(context);
                               setState(() => hasShownSentryDialog = true);
                             });
                           }
 
-                          return PageView(
-                            controller: pageController,
-                            onPageChanged: (index) => setState(() => selectedPageIndex = index),
-                            physics: const NeverScrollableScrollPhysics(),
-                            children: <Widget>[
-                              CommunityPage(scaffoldKey: _feedScaffoldKey),
-                              BlocProvider(
-                                create: (context) => SearchBloc(),
-                                child: const SearchPage(),
-                              ),
-                              const AccountPage(),
-                              const InboxPage(),
-                              SettingsPage(),
-                            ],
-                          );
+                          return widget.body;
                         case AuthStatus.failure:
                           return ErrorMessage(
                             message: state.errorMessage,
-                            action: () => {context.read<AuthBloc>().add(CheckAuth())},
+                            action: () =>
+                                {context.read<AuthBloc>().add(CheckAuth())},
                             actionText: 'Refresh Content',
                           );
                       }
@@ -194,62 +194,53 @@ class _ThunderState extends State<Thunder> {
 
   // Generates the BottomNavigationBar
   Widget _getScaffoldBottomNavigationBar(BuildContext context) {
-    final theme = Theme.of(context);
-    final ThunderState state = context.read<ThunderBloc>().state;
+    return GestureDetector(
+      onHorizontalDragStart: _handleDragStart,
+      onHorizontalDragUpdate: _handleDragUpdate,
+      onHorizontalDragEnd: _handleDragEnd,
+      // onDoubleTap: _handleDoubleTap,
+      child: NavigationBar(
+        selectedIndex: selectedPageIndex,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_rounded),
+            label: 'Feed',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.search_rounded),
+            label: 'Search',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inbox_rounded),
+            label: 'Inbox',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_rounded),
+            label: 'Account',
+          ),
+        ],
+        onDestinationSelected: (index) {
+          setState(() {
+            selectedPageIndex = index;
+          });
 
-    return Theme(
-      data: ThemeData.from(colorScheme: theme.colorScheme).copyWith(
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-      ),
-      child: GestureDetector(
-        onHorizontalDragStart: _handleDragStart,
-        onHorizontalDragUpdate: _handleDragUpdate,
-        onHorizontalDragEnd: _handleDragEnd,
-        onDoubleTap: state.bottomNavBarDoubleTapGestures == true ? _handleDoubleTap : null,
-        child: BottomNavigationBar(
-          currentIndex: selectedPageIndex,
-          showSelectedLabels: false,
-          showUnselectedLabels: false,
-          selectedItemColor: theme.colorScheme.primary,
-          type: BottomNavigationBarType.fixed,
-          unselectedFontSize: 20.0,
-          selectedFontSize: 20.0,
-          elevation: 1,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_rounded),
-              label: 'Feed',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.search_rounded),
-              label: 'Search',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
-              label: 'Account',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.inbox_rounded),
-              label: 'Inbox',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_rounded),
-              label: 'Settings',
-            ),
-          ],
-          onTap: (index) {
-            setState(() {
-              selectedPageIndex = index;
-              pageController.animateToPage(index, duration: const Duration(milliseconds: 500), curve: Curves.ease);
-            });
-
-            // @todo Change this from integer to enum or some other type
-            if (index == 3) {
+          switch (index) {
+            case 0:
+              context.go("/");
+              break;
+            case 1:
+              context.go("/search");
+              break;
+            case 2:
               context.read<InboxBloc>().add(const GetInboxEvent());
-            }
-          },
-        ),
+              context.go("/inbox");
+              break;
+            case 3:
+              context.go("/account");
+              break;
+          }
+        },
       ),
     );
   }
@@ -279,9 +270,15 @@ class _ThunderState extends State<Thunder> {
         ),
         onTap: () {
           if (openInExternalBrowser) {
-            launchUrl(Uri.parse('https://github.com/hjiangsu/thunder/releases/latest'), mode: LaunchMode.externalApplication);
+            launchUrl(
+                Uri.parse(
+                    'https://github.com/hjiangsu/thunder/releases/latest'),
+                mode: LaunchMode.externalApplication);
           } else {
-            Navigator.of(context).push(MaterialPageRoute(builder: (context) => const WebView(url: 'https://github.com/hjiangsu/thunder/releases/latest')));
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const WebView(
+                    url:
+                        'https://github.com/hjiangsu/thunder/releases/latest')));
           }
         },
       ),
@@ -302,31 +299,38 @@ class _ThunderState extends State<Thunder> {
         return Container(
           color: Color.lerp(Colors.transparent, Colors.black54, t),
           child: FractionalTranslation(
-            translation: Offset.lerp(const Offset(0, 1), const Offset(0, 0), t)!,
+            translation:
+                Offset.lerp(const Offset(0, 1), const Offset(0, 0), t)!,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
                 Card(
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 0, bottom: 8.0),
+                      padding: const EdgeInsets.only(
+                          left: 16.0, right: 16.0, top: 0, bottom: 8.0),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Enable Sentry Error Reporting?',
-                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                            style: theme.textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 12.0),
                           Text(
                             'By opting in, any errors that you encounter will be automatically sent to Sentry to improve Thunder.',
-                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8)),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.8)),
                           ),
                           const SizedBox(height: 8.0),
                           Text(
                             'You may opt out at any time in the Settings.',
-                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8)),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withOpacity(0.8)),
                           ),
                           const SizedBox(height: 8.0),
                           Row(
@@ -335,14 +339,18 @@ class _ThunderState extends State<Thunder> {
                               TextButton(
                                 child: const Text('Allow'),
                                 onPressed: () {
-                                  prefs.setBool('setting_error_tracking_enable_sentry', true);
+                                  prefs.setBool(
+                                      'setting_error_tracking_enable_sentry',
+                                      true);
                                   OverlaySupportEntry.of(context)!.dismiss();
                                 },
                               ),
                               TextButton(
                                 child: const Text('Do not allow'),
                                 onPressed: () {
-                                  prefs.setBool('setting_error_tracking_enable_sentry', false);
+                                  prefs.setBool(
+                                      'setting_error_tracking_enable_sentry',
+                                      false);
                                   OverlaySupportEntry.of(context)!.dismiss();
                                 },
                               ),

@@ -19,6 +19,7 @@ import 'package:thunder/core/singletons/preferences.dart';
 import 'package:thunder/routes.dart';
 import 'package:thunder/core/singletons/database.dart';
 import 'package:thunder/core/theme/bloc/theme_bloc.dart';
+import 'package:thunder/thunder/bloc/thunder_bloc.dart';
 
 // Ignore specific exceptions to send to Sentry
 FutureOr<SentryEvent?> beforeSend(SentryEvent event, {Hint? hint}) async {
@@ -72,8 +73,11 @@ class ThunderApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => ThemeBloc(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (context) => ThunderBloc()),
+        BlocProvider(create: (context) => ThemeBloc()),
+      ],
       child: BlocBuilder<ThemeBloc, ThemeState>(
         builder: (context, state) {
           if (state.status == ThemeStatus.initial) {

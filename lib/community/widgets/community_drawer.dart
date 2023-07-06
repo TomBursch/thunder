@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lemmy_api_client/v3.dart';
 import 'package:thunder/account/bloc/account_bloc.dart';
 import 'package:thunder/community/bloc/community_bloc.dart';
@@ -108,12 +109,7 @@ class _CommunityDrawerState extends State<CommunityDrawer> {
                 return DrawerItem(
                   disabled: destination.listingType == PostListingType.subscribed && isLoggedIn == false,
                   onTap: () {
-                    context.read<CommunityBloc>().add(GetCommunityPostsEvent(
-                          reset: true,
-                          listingType: destination.listingType,
-                          communityId: null,
-                        ));
-                    Navigator.of(context).pop();
+                    context.go("/", extra: destination.listingType);
                   },
                   label: destination.label,
                   icon: destination.icon,
@@ -150,14 +146,7 @@ class _CommunityDrawerState extends State<CommunityDrawer> {
                                         minimumSize: const Size.fromHeight(50),
                                       ),
                                       onPressed: () {
-                                        context.read<CommunityBloc>().add(
-                                              GetCommunityPostsEvent(
-                                                reset: true,
-                                                communityId: context.read<AccountBloc>().state.subsciptions[index].community.id,
-                                              ),
-                                            );
-
-                                        Navigator.of(context).pop();
+                                        context.push("/community/${context.read<AccountBloc>().state.subsciptions[index].community.id}");
                                       },
                                       child: Column(
                                         mainAxisAlignment: MainAxisAlignment.start,
